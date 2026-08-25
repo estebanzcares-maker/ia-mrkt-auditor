@@ -6,6 +6,11 @@ from reportlab.lib.colors import HexColor
 import tempfile
 import re
 import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
 from datetime import datetime
 
 PACKS = {1: 59900, 3: 129000, 5: 179900}
@@ -91,7 +96,61 @@ def validar_email(email):
     if len(domain.split(".")[-1]) < 2: return False, "Extensión muy corta"
     disposable = ["tempmail","10minutemail","mailinator","guerrillamail","yopmail","throwaway"]
     if any(d in domain.lower() for d in disposable): return False, "Email temporal no permitido"
-    return True, "OK"
+
+def enviar_pdf_por_email(email_destino, pdf_path, plataforma, fuga_total):
+    """Envía PDF al cliente y copia a admin. Usa st.secrets si existen, sino no envía."""
+    try:
+        # Config desde Streamlit Secrets (opcional)
+        email_user = st.secrets.get("EMAIL_USER", "") if hasattr(st, "secrets") else ""
+        email_pass = st.secrets.get("EMAIL_PASS", "") if hasattr(st, "secrets") else ""
+        email_admin = st.secrets.get("EMAIL_ADMIN", email_user) if hasattr(st, "secrets") else email_user
+
+        if not email_user or not email_pass:
+            # Sin config, no falla, solo retorna False para no romper diseño
+            return False, "Email no configurado en Secrets"
+
+        msg = MIMEMultipart()
+        msg['From'] = f"IA.MRKT <{email_user}>"
+        msg['To'] = email_destino
+        msg['Subject'] = f"Tu Auditoría IA.MRKT {plataforma} - Fuga ${fuga_total:,.0f} detectada"
+
+        body = f"""Hola,
+
+Tu auditoría IA.MRKT {plataforma} está lista.
+
+Fuga detectada: ${fuga_total:,.0f} CLP/mes
+Email auditado: {email_destino}
+
+Adjunto el PDF completo.
+
+Si quieres que optimicemos esto por ti, responde este correo.
+
+— IA.MRKT
+Auditor privado
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        with open(pdf_path, "rb") as attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(pdf_path)}"')
+            msg.attach(part)
+
+        # Enviar a cliente + admin en BCC
+        destinatarios = [email_destino]
+        if email_admin and email_admin != email_destino:
+            destinatarios.append(email_admin)
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(email_user, email_pass)
+        server.send_message(msg, from_addr=email_user, to_addrs=destinatarios)
+        server.quit()
+        return True, "Enviado"
+    except Exception as e:
+        return False, str(e)
+
 
 LEADS_FILE = "leads_ia_mrkt.csv"
 def guardar_lead(email, plataforma, fuga, plan_camp, precio_plan, num_camp_csv, num_verdes, num_rojos, csv_nombre=""):
@@ -370,6 +429,19 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         cc.showPage(); cc.save()
                         return tmp.name
                     pdf_path = gen_pdf()
+                    # === NUEVO: ENVÍO AUTOMÁTICO PDF POR EMAIL (sin tocar diseño) ===
+                    try:
+                        enviado, detalle_envio = enviar_pdf_por_email(email_final, pdf_path, plat_usar, res["total_fuga"])
+                        if enviado:
+                            st.markdown(f'<div style="margin-bottom:10px; padding:10px 14px; background:#0A1C0A; border:1px solid #CCFF00; border-radius:10px; font-size:12px; color:#CCFF00;">✅ PDF enviado automáticamente a <span class="mono">{email_final}</span></div>', unsafe_allow_html=True)
+                        else:
+                            # Si no hay secrets configurados, no mostrar error rojo, solo info sutil
+                            if "no configurado" not in detalle_envio.lower():
+                                st.markdown(f'<div style="margin-bottom:10px; font-size:11px; color:#888;">ℹ️ Email automático: {detalle_envio}</div>', unsafe_allow_html=True)
+                    except Exception as e:
+                        pass
+                    # === FIN NUEVO ===
+
                     with open(pdf_path,"rb") as f:
                         st.download_button("⬇ Descargar PDF IA.MRKT", f, file_name=f"IA_MRKT_Auditoria_{plat_usar}_{email_final.split('@')[0]}.pdf", mime="application/pdf", use_container_width=True)
                     
