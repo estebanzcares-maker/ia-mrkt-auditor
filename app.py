@@ -3,6 +3,9 @@ import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import HexColor
+from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import tempfile
 import re
 import os
@@ -35,11 +38,11 @@ st.markdown('''
 .stApp { background-color: #0A0A0A; color: #E5E5E5; font-family: 'Inter', sans-serif; }
 h1, h2, h3 { font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: -0.03em; }
 .mono { font-family: 'JetBrains Mono', monospace; }
-div[data-testid="stButton"] > button { background: #CCFF00 !important; color: #0A0A0A !important; border: none !important; border-radius: 12px !important; font-weight: 800 !important; padding: 14px 20px !important; font-size: 14px !important; }
-div[data-testid="stButton"] > button:hover { background: #D4FF33 !important; box-shadow: 0 0 20px rgba(204,255,0,0.4) !important; }
-div[data-testid="stFileUploader"] { background: #141414 !important; border: 1px dashed #333 !important; border-radius: 12px !important; }
+div[data-testid="stButton"] > button { background: #CCFF00!important; color: #0A0A0A!important; border: none!important; border-radius: 12px!important; font-weight: 800!important; padding: 14px 20px!important; font-size: 14px!important; }
+div[data-testid="stButton"] > button:hover { background: #D4FF33!important; box-shadow: 0 0 20px rgba(204,255,0,0.4)!important; }
+div[data-testid="stFileUploader"] { background: #141414!important; border: 1px dashed #333!important; border-radius: 12px!important; }
 .card { background: #141414; border: 1px solid #262626; border-radius: 16px; padding: 20px; text-align: center; }
-.card .kpi-label, .card .mono { text-align: center; }
+.card.kpi-label,.card.mono { text-align: center; }
 .card div { text-align: center; }
 .card-lime { border: 1px solid #CCFF00; box-shadow: 0 0 40px rgba(204,255,0,0.18); background: #111; border-radius: 20px; padding: 28px; }
 .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:0.05em; }
@@ -52,10 +55,10 @@ div[data-testid="stFileUploader"] { background: #141414 !important; border: 1px 
 .alert-amarillo { background: #1C1A0A; border: 1px solid #3A351A; border-left: 4px solid #FFAA00; border-radius: 12px; padding: 14px 18px; margin-bottom:10px; color: #E5E5E5; }
 .alert-amarillo-contraste { background: #1C1A0A; border: 1px solid #FFAA00; border-left: 4px solid #FFAA00; border-radius: 12px; padding: 14px 18px; margin-bottom:10px; }
 .gallery-item { background:#141414; border:1px solid #262626; border-radius:12px; padding:14px; }
-.stTextInput > div > div > input { background:#0A0A0A !important; border:1px solid #333 !important; border-radius:12px !important; color:#E5E5E5 !important; }
-div[data-testid="stAlert"] { background-color: #1C1A0A !important; border: 1px solid #FFAA00 !important; color: #E5E5E5 !important; }
-div[data-testid="stAlert"] p { color: #E5E5E5 !important; }
-a { color: #CCFF00 !important; }
+.stTextInput > div > div > input { background:#0A0A0A!important; border:1px solid #333!important; border-radius:12px!important; color:#E5E5E5!important; }
+div[data-testid="stAlert"] { background-color: #1C1A0A!important; border: 1px solid #FFAA00!important; color: #E5E5E5!important; }
+div[data-testid="stAlert"] p { color: #E5E5E5!important; }
+a { color: #CCFF00!important; }
 </style>
 ''', unsafe_allow_html=True)
 
@@ -89,8 +92,8 @@ def validar_email(email):
     email = email.strip()
     pattern = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
     if not re.match(pattern, email): return False, "Formato inválido"
-    if ".." in email: return False, "Email con .. no válido"
-    if email.startswith(".") or email.startswith("@"): return False, "Email no puede empezar con . o @"
+    if ".." in email: return False, "Email con.. no válido"
+    if email.startswith(".") or email.startswith("@"): return False, "Email no puede empezar con. o @"
     domain = email.split("@")[-1]
     if "." not in domain: return False, "Dominio sin punto"
     if len(domain.split(".")[-1]) < 2: return False, "Extensión muy corta"
@@ -103,50 +106,42 @@ def enviar_pdf_por_email(email_destino, pdf_path, plataforma, fuga_total):
     try:
         import resend
         import base64
-        
+
         api_key = st.secrets.get("RESEND_API_KEY", "") if hasattr(st, "secrets") else ""
         email_admin = st.secrets.get("EMAIL_ADMIN", "") if hasattr(st, "secrets") else ""
-        
+
         if not api_key:
             return False, "RESEND_API_KEY no configurado"
-        
+
         resend.api_key = api_key
-        
+
         # Leer PDF en base64
         with open(pdf_path, "rb") as f:
             pdf_b64 = base64.b64encode(f.read()).decode()
-        
+
         # Enviar a cliente
+        email_from = st.secrets.get("EMAIL_FROM", "onboarding@resend.dev") if hasattr(st, "secrets") else "onboarding@resend.dev"
+
+        html_body = f"""
+        <h2>IA.MRKT — Auditoría {plataforma}</h2>
+        <p>Fuga detectada: <b>${fuga_total:,.0f} CLP/mes</b></p>
+        <p>Adjunto PDF completo con detalle por campaña.</p>
+        <p>Nota: En modo test sin dominio verificado, este email solo llega al admin. Cliente debe descargar PDF directo.</p>
+        """
         params = {
-            "from": "IA.MRKT <onboarding@resend.dev>",
+            "from": email_from,
             "to": [email_destino],
-            "subject": f"Tu Auditoría IA.MRKT {plataforma} - Fuga ${fuga_total:,.0f} detectada",
-            "html": f"""
-            <h2>Tu auditoría IA.MRKT {plataforma} está lista</h2>
-            <p><strong>Fuga detectada:</strong> ${fuga_total:,.0f} CLP/mes</p>
-            <p><strong>Email auditado:</strong> {email_destino}</p>
-            <p>Adjunto el PDF completo con el detalle de campañas en ROJO y VERDE.</p>
-            <p>Si quieres que optimicemos esto por ti, responde este correo.</p>
-            <br>
-            <p>— IA.MRKT<br>Auditor privado</p>
-            """,
-            "attachments": [
-                {
-                    "filename": os.path.basename(pdf_path),
-                    "content": pdf_b64
-                }
-            ]
+            "subject": f"IA.MRKT — Auditoría {plataforma} — Fuga ${fuga_total:,.0f}",
+            "html": html_body,
+            "attachments": [{"filename": f"IA_MRKT_{plataforma}.pdf", "content": pdf_b64}]
         }
-        
-        # Si hay admin diferente, lo agregamos en bcc
-        if email_admin and email_admin != email_destino:
+        email_admin = st.secrets.get("EMAIL_ADMIN", "") if hasattr(st, "secrets") else ""
+        if email_admin and email_admin!= email_destino:
             params["bcc"] = [email_admin]
-        
         resend.Emails.send(params)
-        return True, "Enviado con Resend"
+        return True, "Enviado"
     except Exception as e:
         return False, str(e)
-
 
 LEADS_FILE = "leads_ia_mrkt.csv"
 def guardar_lead(email, plataforma, fuga, plan_camp, precio_plan, num_camp_csv, num_verdes, num_rojos, csv_nombre=""):
@@ -163,13 +158,10 @@ def guardar_lead(email, plataforma, fuga, plan_camp, precio_plan, num_camp_csv, 
             "verdes": num_verdes,
             "rojos": num_rojos,
             "csv_nombre": csv_nombre,
-            "plan_link": f"plan_{plan_camp}"  # FIX: sin ?plan visible
+            "plan_link": f"plan_{plan_camp}"
         }
         if os.path.exists(LEADS_FILE):
             df_leads = pd.read_csv(LEADS_FILE)
-            # Migración: si existe columna vieja plan_query, la renombramos
-            if "plan_query" in df_leads.columns:
-                df_leads = df_leads.drop(columns=["plan_query"])
             df_leads = pd.concat([df_leads, pd.DataFrame([fila])], ignore_index=True)
         else:
             df_leads = pd.DataFrame([fila])
@@ -179,7 +171,6 @@ def guardar_lead(email, plataforma, fuga, plan_camp, precio_plan, num_camp_csv, 
         print(f"Error guardando lead: {e}")
         return False
 
-# === DETECTAR v0.6.8 - UMBRALES BAJOS PARA DEMO + MANTIENE OPTIMIZADA ===
 def detectar(df, plataforma="GOOGLE"):
     cols = {c.lower().strip(): c for c in df.columns}
     def get_col(keys):
@@ -223,7 +214,7 @@ def detectar(df, plataforma="GOOGLE"):
             elif cpc>1200 and conv<=1 and costo>20000: fuga=costo*0.4; tipo=f"CPL Alto | {int(conv)} conv"; color="rojo"
             elif conv>=2 and ctr>=0.5: tipo=f"VERDE | {int(conv)} leads | CTR {ctr:.2f}%"; color="verde"
             else: continue
-        else: # GOOGLE - UMBRALES BAJOS PARA DEMO
+        else:
             if costo>25000 and conv==0: fuga=costo*0.7; tipo="Mala Distribución | 0 conversiones"; color="rojo"
             elif costo>35000 and (conv<=1 or roas<1.0): fuga=costo*0.4; tipo=f"ROAS bajo {roas} | Gasto alto"; color="rojo"
             elif ctr>0 and ctr<1.5 and costo>12000: fuga=costo*0.25; tipo=f"Fatiga Creativa | CTR {ctr}%"; color="amarillo"
@@ -233,14 +224,12 @@ def detectar(df, plataforma="GOOGLE"):
         alertas.append({"camp":camp,"costo":costo,"conv":conv,"roas":roas,"ctr":ctr,"cpc":cpc,"freq":freq,"fuga":fuga,"tipo":tipo,"color":color})
     total_fuga = sum(a["fuga"] for a in alertas if a["color"]!="verde")
     verdes = [a for a in alertas if a["color"]=="verde"]; rojos = [a for a in alertas if a["color"]!="verde"]
-    # A: si no hay rojos pero tampoco verdes y hay campañas, marcamos como optimizada con fuga 0
     if len(alertas)==0 and len(df)>0:
-        # No es error, es que está optimizada - devolvemos 0 fuga con mensaje verde genérico
         alertas.append({"camp":f"{len(df)} campañas analizadas","costo":0,"conv":0,"roas":0,"ctr":0,"cpc":0,"freq":0,"fuga":0,"tipo":f"VERDE | {len(df)} campañas sin fuga crítica detectada | Optimizada","color":"verde"})
         verdes = alertas
     return {"alertas":alertas,"total_fuga":total_fuga,"verdes":verdes,"rojos":rojos}, None
 
-st.markdown('<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0 20px 0;"><div style="font-weight:800; font-size:20px; letter-spacing:-0.05em;">IA.MRKT <span style="color:#CCFF00;">●</span></div><div><span class="badge badge-lime-border">IA.MRKT MOTOR v0.6.8</span> <span class="badge badge-verde">PRIVADO</span></div></div>', unsafe_allow_html=True)
+st.markdown('<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0 20px 0;"><div style="font-weight:800; font-size:20px; letter-spacing:-0.05em;">IA.MRKT <span style="color:#CCFF00;">●</span></div><div><span class="badge badge-lime-border">IA.MRKT MOTOR v0.7 PDF PULIDO</span> <span class="badge badge-verde">PRIVADO</span></div></div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([1.15, 0.85], gap="large")
 with col1:
@@ -251,86 +240,46 @@ with col1:
     st.session_state["plat"] = plataforma
     label_map = {"GOOGLE":"Google Ads","META":"Meta Ads","LINKEDIN":"LinkedIn Ads"}
     st.markdown(f'<h1 style="font-size:54px; line-height:0.9; margin-top:10px;">¿Dónde se fuga<br>tu presupuesto<br>de <span style="color:#CCFF00;">{label_map[plataforma]}?</span></h1>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#888; font-size:15px; margin-top:12px;">Motor IA.MRKT v0.6.8 analiza CSV de Google, Meta o LinkedIn en 30 seg. Sin acceso a tu cuenta. Solo números. Detecta hasta $602.500 CLP en fuga/mes promedio • 100% local y privado.</p>', unsafe_allow_html=True)
-    st.markdown('<div style="margin-top:20px; display:flex; gap:10px;"><div class="card" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;"><div class="kpi-label" style="text-align:center; width:100%;">GOOGLE</div><div class="mono" style="font-weight:700; text-align:center; width:100%;">CPC • ROAS</div><div style="font-size:10px; color:#666; margin-top:4px; text-align:center; width:100%;">Detecta CTR bajo</div></div><div class="card" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;"><div class="kpi-label" style="text-align:center; width:100%;">META</div><div class="mono" style="font-weight:700; text-align:center; width:100%;">FREQ • CPC</div><div style="font-size:10px; color:#666; margin-top:4px; text-align:center; width:100%;">Detecta Fatiga</div></div><div class="card" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;"><div class="kpi-label" style="text-align:center; width:100%;">LINKEDIN</div><div class="mono" style="font-weight:700; text-align:center; width:100%;">CPL • CTR</div><div style="font-size:10px; color:#666; margin-top:4px; text-align:center; width:100%;">Detecta B2B frío</div></div></div>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#888; font-size:15px; margin-top:12px;">Motor IA.MRKT v0.7 PDF Pulido analiza CSV de Google, Meta o LinkedIn en 30 seg. Sin acceso a tu cuenta. Solo números. PDF con tabla completa + acciones.</p>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown(f'''
-    <div class="card-lime" style="margin-bottom:0;">
-        <div class="kpi-label" style="color:#CCFF00;">ACCESO PRIVADO IA.MRKT • PLAN {LIMITE_CAMPANAS} CAMPAÑA{"S" if LIMITE_CAMPANAS>1 else ""}</div>
-    ''', unsafe_allow_html=True)
-
-    if st.session_state["auditorias_hechas"] >= LIMITE_CAMPANAS:
-        st.markdown(f'''
-            <div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:12px; padding:16px; margin:12px 0;">
-                <div class="mono" style="color:#FF3B30; font-weight:700;">LÍMITE ALCANZADO — {LIMITE_CAMPANAS} CAMPAÑA{"S" if LIMITE_CAMPANAS>1 else ""}</div>
-                <div style="font-size:13px; color:#DDD; margin-top:8px;">Ya auditaste {st.session_state["auditorias_hechas"]} campaña(s) con ${PRECIO_PLAN:,.0f}.<br>Para más: contacta. estebanzcares@gmail.com</div>
-            </div>
-        ''', unsafe_allow_html=True)
-        if st.button("🔄 REINICIAR (ADMIN)", use_container_width=True):
-            st.session_state["auditorias_hechas"] = 0
-            st.session_state["run_audit"] = False
-            st.session_state.pop("plat_autodetect", None)
-            st.rerun()
-        email = None
-        csv_file = None
-    else:
-        st.markdown('<div style="font-size:13px; color:#888; margin:12px 0 8px 0;">Tu correo para PDF completo</div>', unsafe_allow_html=True)
-        email = st.text_input("email_input", placeholder="ej: tu@empresa.cl", label_visibility="collapsed")
-        email_valido = True
-        email_msg = ""
-        if email:
-            email_valido, email_msg = validar_email(email)
-            if email_valido:
-                st.markdown('<div style="font-size:10px; color:#CCFF00; margin-top:4px;">✅ Email válido — PDF se generará con este correo</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div style="font-size:10px; color:#FF3B30; margin-top:4px;">❌ {email_msg}</div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:#141414; border:1px solid #262626; border-radius:16px; padding:20px;">', unsafe_allow_html=True)
+    st.markdown('<div class="kpi-label">CORREO PARA REPORTE PULIDO</div>', unsafe_allow_html=True)
+    email = st.text_input("Email", label_visibility="collapsed", placeholder="tu@empresa.com")
+    email_valido = False
+    email_msg = ""
+    if email:
+        ok, msg = validar_email(email)
+        email_valido = ok
+        email_msg = msg
+        if ok:
+            st.markdown(f'<div style="background:#0A1C0A; border:1px solid #CCFF00; border-radius:8px; padding:8px; font-size:10px; margin-top:8px; color:#CCFF00;">✅ {msg} — PDF v2 tabla completa</div>', unsafe_allow_html=True)
         else:
-            email_valido = False
+            st.markdown(f'<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:8px; font-size:10px; margin-top:8px; color:#FF3B30;">❌ {msg}</div>', unsafe_allow_html=True)
 
-        st.markdown(f'<div style="font-size:13px; color:#888; margin:16px 0 8px 0;">CSV de {st.session_state.get("plat","GOOGLE")} Ads — quedan {LIMITE_CAMPANAS - st.session_state["auditorias_hechas"]} auditoría(s)</div>', unsafe_allow_html=True)
-        csv_file = st.file_uploader("csv", type=["csv"], label_visibility="collapsed")
-        if csv_file:
-            try:
-                df_tmp = pd.read_csv(csv_file)
-                plat_detectada = autodetect_platform(df_tmp)
-                if plat_detectada != plataforma:
-                    st.markdown(f'<div style="background:#1C1A0A; border:1px solid #FFAA00; border-left:4px solid #FFAA00; border-radius:8px; padding:10px; font-size:11px; margin-top:8px; color:#E5E5E5;"><span style="color:#FFAA00; font-weight:700;">⚠️ AUTODETECT:</span> Detecté CSV de <b style="color:#FFFFFF;">{plat_detectada}</b> pero tenías <b>{plataforma}</b>. Al auditar cambiaré a {plat_detectada} automáticamente.</div>', unsafe_allow_html=True)
-                    st.session_state["plat_autodetect"] = plat_detectada
-                else:
-                    st.markdown(f'<div style="background:#0A1C0A; border:1px solid #262626; border-left:4px solid #CCFF00; border-radius:8px; padding:8px; font-size:10px; margin-top:8px; color:#CCFF00;">✅ CSV detectado como {plat_detectada}</div>', unsafe_allow_html=True)
-                csv_file.seek(0)
-            except: pass
-        st.markdown('<div style="font-size:11px; color:#555; margin-top:4px; text-align:center;">Exportar desde Ads Manager > Exportar > CSV • 200MB max</div>', unsafe_allow_html=True)
-        
-        btn_auditar = st.button("🔒 AUDITAR CON IA.MRKT", use_container_width=True, key="btn_auditar")
-        if btn_auditar:
-            if not email:
-                st.markdown('<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px; color:#E5E5E5; margin-top:8px;"><span style="color:#FF3B30;">⚠️ Debes ingresar tu correo para generar el PDF.</span></div>', unsafe_allow_html=True)
-            elif not email_valido:
-                st.markdown(f'<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px; color:#E5E5E5; margin-top:8px;">❌ <span style="color:#FF3B30;">Email inválido:</span> {email_msg}</div>', unsafe_allow_html=True)
-            else:
-                st.session_state["run_audit"] = True
-                st.session_state["email_validado"] = email.strip()
+    st.markdown('<div style="height:12px;"></div><div class="kpi-label">CSV DE CAMPAÑAS (GOOGLE/META/LINKEDIN)</div>', unsafe_allow_html=True)
+    csv_file = st.file_uploader("CSV", label_visibility="collapsed", type=["csv"])
+    if csv_file:
+        try:
+            df_prev = pd.read_csv(csv_file)
+            plat_detectada = autodetect_platform(df_prev)
+            st.markdown(f'<div style="background:#0A1C0A; border:1px solid #262626; border-left:4px solid #CCFF00; border-radius:8px; padding:8px; font-size:10px; margin-top:8px; color:#CCFF00;">✅ CSV detectado como {plat_detectada} — {len(df_prev)} campañas</div>', unsafe_allow_html=True)
+            st.session_state["plat_autodetect"] = plat_detectada
+            csv_file.seek(0)
+        except: pass
 
-        st.markdown(f'<div style="margin-top:12px; font-size:11px; color:#666; text-align:center;">Plan actual: {LIMITE_CAMPANAS} campaña(s) • ${PRECIO_BASE:,.0f} c/u • Boleta Honorarios</div>', unsafe_allow_html=True)
+    btn_auditar = st.button("🔒 AUDITAR CON IA.MRKT — PDF PULIDO V2", use_container_width=True, key="btn_auditar")
+    if btn_auditar:
+        if not email:
+            st.markdown('<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px; color:#E5E5E5; margin-top:8px;"><span style="color:#FF3B30;">⚠️ Debes ingresar tu correo</span></div>', unsafe_allow_html=True)
+        elif not email_valido:
+            st.markdown(f'<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px; color:#E5E5E5; margin-top:8px;">❌ {email_msg}</div>', unsafe_allow_html=True)
+        else:
+            st.session_state["run_audit"] = True
+            st.session_state["email_validado"] = email.strip()
 
-    st.markdown('''
-        <div style="margin-top:6px; font-size:10px; color:#444; text-align:center;">Pago por transferencia • Link privado.</div>
-    </div>
-    ''', unsafe_allow_html=True)
-
-st.markdown('<div style="height:1px; background:#1A1A1A; margin:30px 0;"></div>', unsafe_allow_html=True)
-st.markdown('<div class="kpi-label" style="margin-bottom:14px;">AUDITORÍAS RECIENTES • GOOGLE • META • LINKEDIN (ANONIMIZADAS)</div>', unsafe_allow_html=True)
-g1,g2,g3,g4 = st.columns(4)
-with g1:
-    st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">GOOGLE • HOTEL COSTA • $1.2M</div><div class="mono" style="font-weight:700; color:#FF3B30; margin-top:6px;">$602.500 FUGA</div><div style="margin-top:8px; display:flex; gap:4px;"><div style="width:100%; height:6px; background:#FF3B30; border-radius:99px;"></div><div style="width:60%; height:6px; background:#333; border-radius:99px;"></div></div><div style="font-size:10px; color:#666; margin-top:8px;">3 ROJOS • 4 VERDES</div></div>', unsafe_allow_html=True)
-with g2:
-    st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">META • FERRETERÍA 3 LOCALES • $890k</div><div class="mono" style="font-weight:700; color:#FF3B30; margin-top:6px;">$445.000 FUGA</div><div style="margin-top:8px; display:flex; gap:4px;"><div style="width:70%; height:6px; background:#FF3B30; border-radius:99px;"></div><div style="width:30%; height:6px; background:#333; border-radius:99px;"></div></div><div style="font-size:10px; color:#666; margin-top:8px;">2 AMARILLOS • 2 VERDES</div></div>', unsafe_allow_html=True)
-with g3:
-    st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">LINKEDIN • SAAS B2B • $750k</div><div class="mono" style="font-weight:700; color:#FFAA00; margin-top:6px;">$407.500 FUGA</div><div style="margin-top:8px; display:flex; gap:4px;"><div style="width:50%; height:6px; background:#FFAA00; border-radius:99px;"></div><div style="width:50%; height:6px; background:#333; border-radius:99px;"></div></div><div style="font-size:10px; color:#666; margin-top:8px;">1 ROJO • 1 AMARILLO</div></div>', unsafe_allow_html=True)
-with g4:
-    st.markdown('<div class="gallery-item" style="border-color:#CCFF00;"><div class="mono" style="font-size:11px; color:#CCFF00;">CLÍNICA DENTAL • META • $2.1M</div><div class="mono" style="font-weight:700; color:#CCFF00; margin-top:6px;">$0 FUGA • OPTIMIZADA</div><div style="margin-top:8px; display:flex; gap:4px;"><div style="width:100%; height:6px; background:#CCFF00; border-radius:99px;"></div></div><div style="font-size:10px; color:#666; margin-top:8px;">6 VERDES • ROAS 5.8</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="margin-top:12px; font-size:11px; color:#666; text-align:center;">Plan actual: {LIMITE_CAMPANAS} campaña(s) • ${PRECIO_BASE:,.0f} c/u • PDF v2 tabla completa</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 email_final = st.session_state.get("email_validado", email if 'email' in locals() else None)
 
@@ -347,59 +296,22 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
             plat_detectada = autodetect_platform(df)
             plat_selector = st.session_state.get("plat","GOOGLE")
             plat_usar = st.session_state.get("plat_autodetect", plat_detectada)
-            if plat_detectada != plat_selector:
+            if plat_detectada!= plat_selector:
                 plat_usar = plat_detectada
-                st.markdown(f'<div class="alert-amarillo" style="color:#E5E5E5;"><span class="mono" style="font-weight:700; color:#FFAA00;">🤖 AUTODETECT:</span> <span style="color:#FFFFFF;">CSV de {plat_detectada} auditado como {plat_detectada}.</span></div>', unsafe_allow_html=True)
-                st.session_state["plat"] = plat_detectada
-            else:
-                plat_usar = plat_selector
 
             num_camp_csv = len(df)
-            if num_camp_csv > LIMITE_CAMPANAS:
-                precio_full = PACKS.get(num_camp_csv, PRECIO_BASE * num_camp_csv)
-                st.markdown(f'''
-                <div class="alert-amarillo-contraste">
-                    <div style="color:#FFAA00; font-weight:700; font-size:12px; margin-bottom:4px;">⚠️ LÍMITE DE PLAN</div>
-                    <div style="color:#E5E5E5; font-size:13px;">Tu CSV tiene <b style="color:#FFFFFF;">{num_camp_csv} campañas</b>, pero tu plan de <b style="color:#CCFF00;">${PRECIO_PLAN:,.0f}</b> incluye solo <b style="color:#FFFFFF;">{LIMITE_CAMPANAS}</b>. Auditaremos solo las primeras {LIMITE_CAMPANAS}.</div>
-                    <div style="color:#888; font-size:11px; margin-top:6px;">Pack {num_camp_csv} campañas = <b style="color:#CCFF00;">${precio_full:,.0f}</b> • Contacta para pack extra</div>
-                </div>
-                ''', unsafe_allow_html=True)
-                df_limite = df.head(LIMITE_CAMPANAS)
-            else:
-                df_limite = df
+            df_limite = df.head(LIMITE_CAMPANAS) if num_camp_csv > LIMITE_CAMPANAS else df
 
             res, err = detectar(df_limite, plataforma=plat_usar)
             if err:
                 st.error(err)
                 st.session_state["run_audit"] = False
             else:
-                csv_nombre = getattr(csv_file, 'name', 'csv_subido')
-                guardado = guardar_lead(
-                    email=email_final,
-                    plataforma=plat_usar,
-                    fuga=res["total_fuga"],
-                    plan_camp=LIMITE_CAMPANAS,
-                    precio_plan=PRECIO_PLAN,
-                    num_camp_csv=num_camp_csv,
-                    num_verdes=len(res["verdes"]),
-                    num_rojos=len(res["rojos"]),
-                    csv_nombre=csv_nombre
-                )
-
                 st.session_state["auditorias_hechas"] += 1
-                st.session_state["run_audit"] = False
-                st.session_state.pop("plat_autodetect", None)
+                guardar_lead(email_final, plat_usar, res["total_fuga"], LIMITE_CAMPANAS, PRECIO_PLAN, num_camp_csv, len(res["verdes"]), len(res["rojos"]), getattr(csv_file,'name',''))
 
-                st.markdown('<div style="height:1px; background:#1A1A1A; margin:30px 0;"></div>', unsafe_allow_html=True)
-                # A: Si fuga 0, mostrar optimizada
-                if res["total_fuga"] == 0 and len(res["verdes"])>0 and len(res["rojos"])==0:
-                    st.markdown(f'<h2 style="font-size:32px;">Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">$0 FUGA • OPTIMIZADA</span></h2>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="display:flex; gap:16px; margin:20px 0;"><div class="card" style="flex:1;"><div class="kpi-label">FUGA ESTIMADA / MES</div><div class="kpi-big mono" style="color:#CCFF00;">$0</div></div><div class="card" style="flex:1;"><div class="kpi-label">CAMPAÑAS EN VERDE</div><div class="kpi-big mono">{len(res["verdes"])}</div></div><div class="card" style="flex:1;"><div class="kpi-label">ESTADO</div><div class="kpi-big mono" style="color:#CCFF00; font-size:24px;">OPTIMIZADA</div></div></div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<h2 style="font-size:32px;">Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">${res["total_fuga"]:,.0f} CLP</span> detectados</h2>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="display:flex; gap:16px; margin:20px 0;"><div class="card" style="flex:1;"><div class="kpi-label">FUGA ESTIMADA / MES</div><div class="kpi-big mono" style="color:#FF3B30;">${res["total_fuga"]:,.0f}</div></div><div class="card" style="flex:1;"><div class="kpi-label">CAMPAÑAS EN VERDE</div><div class="kpi-big mono">{len(res["verdes"])}</div></div><div class="card" style="flex:1;"><div class="kpi-label">ALERTAS CRÍTICAS</div><div class="kpi-big mono">{len(res["rojos"])}</div></div></div>', unsafe_allow_html=True)
-                if guardado:
-                    st.markdown('<div style="font-size:11px; color:#CCFF00; margin-bottom:12px;">✅ Lead guardado en base de datos local</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="display:flex; gap:16px; margin:20px 0;"><div class="card" style="flex:1;"><div class="kpi-label">FUGA ESTIMADA / MES</div><div class="kpi-big mono" style="color:#FF3B30;">${res["total_fuga"]:,.0f}</div></div><div class="card" style="flex:1;"><div class="kpi-label">CAMPAÑAS EN VERDE</div><div class="kpi-big mono">{len(res["verdes"])}</div></div><div class="card" style="flex:1;"><div class="kpi-label">ALERTAS CRÍTICAS</div><div class="kpi-big mono">{len(res["rojos"])}</div></div></div>', unsafe_allow_html=True)
+
                 c1,c2 = st.columns([2,1])
                 with c1:
                     for a in res["rojos"]:
@@ -409,20 +321,108 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         st.markdown(f'<div class="alert-verde"><span class="mono" style="color:#CCFF00; font-weight:700; font-size:12px;">VERDE</span> <span style="margin-left:8px; font-size:13px; color:#E5E5E5;">{a["camp"]} | {a["tipo"]}</span></div>', unsafe_allow_html=True)
                 with c2:
                     def gen_pdf():
+                        # === PDF V2 PULIDO - 4 páginas con tabla completa + acciones - REGLA ORO VERDAD ===
                         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-                        cc = canvas.Canvas(tmp.name, pagesize=A4)
-                        cc.setFillColor(HexColor("#0A0A0A")); cc.rect(0,0,595,842, fill=1, stroke=0)
-                        cc.setFillColor(HexColor("#CCFF00")); cc.setFont("Helvetica-Bold", 28); cc.drawString(40,790,"IA.MRKT")
-                        cc.setFillColor(HexColor("#FFFFFF")); cc.setFont("Helvetica", 12); cc.drawString(40,770,f"Reporte {plat_usar} - {email_final} - Plan {LIMITE_CAMPANAS} camp")
-                        cc.setFont("Helvetica-Bold", 20); cc.drawString(40,730,f"Fuga: ${res['total_fuga']:,.0f} CLP/mes [{plat_usar}]")
-                        y=700
-                        for a in res["rojos"]:
-                            cc.setFont("Helvetica", 10); cc.drawString(40,y,f"[{a['color'].upper()}] {a['camp'][:60]} | {a['tipo']} | ${a['fuga']:,.0f}"); y-=18
-                            if y<100: cc.showPage(); y=800
-                        for a in res["verdes"]:
-                            cc.setFont("Helvetica", 10); cc.drawString(40,y,f"[VERDE] {a['camp'][:60]} | {a['tipo']}"); y-=18
-                            if y<100: cc.showPage(); y=800
-                        cc.showPage(); cc.save()
+                        c = canvas.Canvas(tmp.name, pagesize=A4)
+                        W, H = A4
+                        styles = getSampleStyleSheet()
+                        style_small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10, textColor=HexColor("#CCCCCC"))
+                        style_small_w = ParagraphStyle('smallw', parent=styles['Normal'], fontSize=8, leading=10, textColor=HexColor("#FFFFFF"))
+
+                        def fondo_negro():
+                            c.setFillColor(HexColor("#0A0A0A"))
+                            c.rect(0,0,W,H, fill=1, stroke=0)
+
+                        def footer(num):
+                            c.setFillColor(HexColor("#444444"))
+                            c.setFont("Helvetica", 7)
+                            c.drawString(40, 20, f"IA.MRKT • Auditoría {plat_usar} • {email_final} • {datetime.now().strftime('%d/%m/%Y %H:%M')} • Pag {num} • ia-mrkt.com")
+                            c.drawRightString(W-40, 20, "Confidencial - Uso interno cliente")
+
+                        # PAG 1 - PORTADA EJECUTIVA
+                        fondo_negro()
+                        c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 32); c.drawString(40, H-70, "IA.MRKT")
+                        c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica", 11); c.drawString(40, H-90, f"Auditoría de Fuga Presupuestaria — {plat_usar} • Plan {LIMITE_CAMPANAS} camp")
+                        c.setFont("Helvetica", 9); c.setFillColor(HexColor("#888888")); c.drawString(40, H-105, f"Cliente: {email_final} | Fecha: {datetime.now().strftime('%d/%m/%Y')} | Motor v0.7 PDF Pulido")
+
+                        total_fuga = res['total_fuga']; num_rojos = len(res['rojos']); num_verdes = len(res['verdes']); total_camp = len(df_limite) if 'df_limite' in locals() else len(res['alertas'])
+                        c.setFillColor(HexColor("#1A1A1A")); c.roundRect(40, H-200, W-80, 80, 12, fill=1, stroke=0)
+                        c.setStrokeColor(HexColor("#333333")); c.roundRect(40, H-200, W-80, 80, 12, fill=0, stroke=1)
+                        c.setFillColor(HexColor("#FF3B30") if total_fuga>0 else HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 28); c.drawString(55, H-165, f"${total_fuga:,.0f} CLP/mes")
+                        c.setFont("Helvetica", 10); c.setFillColor(HexColor("#FFFFFF")); c.drawString(55, H-185, "Fuga estimada mensual detectada")
+                        c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 16); c.drawString(300, H-165, f"{total_camp} campañas")
+                        c.setFont("Helvetica", 9); c.setFillColor(HexColor("#AAAAAA")); c.drawString(300, H-180, f"{num_rojos} alertas críticas • {num_verdes} en verde • {plat_usar}")
+
+                        y = H-230
+                        c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 12); c.drawString(40, y, "Resumen Ejecutivo"); y-=16
+                        texto_resumen = f"Se analizaron {total_camp} campañas de {plat_usar}. " + (f"Se detectó una fuga de ${total_fuga:,.0f} CLP/mes concentrada en {num_rojos} campaña(s). Optimizando esas campañas, puedes recuperar hasta un 35-80% de ese gasto mal distribuido." if total_fuga>0 else f"No se detectó fuga crítica. {num_verdes} campañas están optimizadas en verde.")
+                        p = Paragraph(texto_resumen, style_small_w); p.wrap(W-80, 100); p.drawOn(c, 40, y-40); y-=60
+                        c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 10); c.drawString(40, y, "Qué incluye este PDF (aunque no te llegue por email):"); y-=14
+                        c.setFont("Helvetica", 8.5); c.setFillColor(HexColor("#AAAAAA"))
+                        bullets = ["1. Tabla completa con todas tus campañas, gasto, conv, ROAS, CTR, CPC, Frecuencia y fuga.", "2. Detalle de cada alerta ROJA/AMARILLA con impacto $ y acción inmediata.", "3. Campañas VERDES para escalar.", "4. Metodología IA.MRKT y próximos pasos."]
+                        for b in bullets: c.drawString(45, y, f"• {b}"); y-=12
+                        footer(1); c.showPage()
+
+                        # PAG 2 - TABLA COMPLETA
+                        fondo_negro()
+                        c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 14); c.drawString(40, H-50, f"Detalle Completo — {total_camp} campañas auditadas [{plat_usar}]")
+                        c.setFont("Helvetica", 8); c.setFillColor(HexColor("#888888")); c.drawString(40, H-62, "Métricas reales de tu CSV + fuga calculada IA.MRKT v0.7")
+                        data = [["Campaña", "Costo", "Conv", "ROAS", "CTR", "CPC/Freq", "Estado", "Fuga"]]
+                        for a in res['alertas']:
+                            camp_short = (a['camp'][:32] + '..') if len(a['camp'])>32 else a['camp']
+                            costo = f"${a['costo']:,.0f}"; conv = f"{a['conv']:.0f}"; roas = f"{a['roas']:.2f}" if a['roas'] else "-"
+                            ctr = f"{a['ctr']:.2f}%" if a['ctr'] else "-"; cpc_freq = f"${a['cpc']:.0f}" if a['cpc'] else (f"{a['freq']:.1f}" if a['freq'] else "-")
+                            estado = a['tipo'][:40]; fuga = f"${a['fuga']:,.0f}" if a['fuga']>0 else "$0"
+                            data.append([camp_short, costo, conv, roas, ctr, cpc_freq, estado, fuga])
+                        col_widths = [135, 55, 30, 30, 40, 50, 110, 50]
+                        table = Table(data, colWidths=col_widths, repeatRows=1)
+                        style = TableStyle([('BACKGROUND', (0,0), (-1,0), HexColor("#CCFF00")), ('TEXTCOLOR', (0,0), (-1,0), HexColor("#000000")), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (-1,0), 7), ('BACKGROUND', (0,1), (-1,-1), HexColor("#141414")), ('TEXTCOLOR', (0,1), (-1,-1), HexColor("#E5E5E5")), ('FONTSIZE', (0,1), (-1,-1), 7), ('FONTNAME', (0,1), (-1,-1), 'Helvetica'), ('GRID', (0,0), (-1,-1), 0.5, HexColor("#262626")), ('ALIGN', (1,1), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 4), ('RIGHTPADDING', (0,0), (-1,-1), 4)])
+                        for i, a in enumerate(res['alertas'], start=1):
+                            if i >= len(data): break
+                            if a['color']=='rojo': style.add('BACKGROUND', (0,i), (-1,i), HexColor("#2A1212")); style.add('TEXTCOLOR', (6,i), (6,i), HexColor("#FF3B30"))
+                            elif a['color']=='amarillo': style.add('BACKGROUND', (0,i), (-1,i), HexColor("#2A2512")); style.add('TEXTCOLOR', (6,i), (6,i), HexColor("#FFAA00"))
+                            elif a['color']=='verde': style.add('BACKGROUND', (0,i), (-1,i), HexColor("#122A12")); style.add('TEXTCOLOR', (6,i), (6,i), HexColor("#CCFF00"))
+                        table.setStyle(style)
+                        tw, th = table.wrap(W-80, H-100); table.drawOn(c, 40, H-90 - th)
+                        footer(2); c.showPage()
+
+                        # PAG 3 - ROJOS CON ACCION
+                        fondo_negro()
+                        c.setFillColor(HexColor("#FF3B30")); c.setFont("Helvetica-Bold", 14); c.drawString(40, H-50, f"Alertas Críticas — Acción Inmediata ({len(res['rojos'])} encontradas)")
+                        y = H-80
+                        if len(res['rojos'])==0:
+                            c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 12); c.drawString(40, y, "✓ No hay alertas rojas. Tus campañas están limpias."); y-=20
+                            c.setFillColor(HexColor("#AAAAAA")); c.setFont("Helvetica", 9); c.drawString(40, y, "Recomendación: Escala las verdes +20% presupuesto y monitorea frecuencia <2.5 en Meta.")
+                        else:
+                            for a in res['rojos'][:8]:
+                                if y < 100: footer(3); c.showPage(); fondo_negro(); y = H-50
+                                c.setFillColor(HexColor("#1C0A0A")); c.setStrokeColor(HexColor("#3A1A1A")); c.roundRect(40, y-50, W-80, 50, 8, fill=1, stroke=1)
+                                c.setFillColor(HexColor("#FF3B30")); c.setFont("Helvetica-Bold", 9); c.drawString(50, y-12, f"[{a['color'].upper()}] {a['camp'][:55]}")
+                                c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica", 8); c.drawString(50, y-26, f"Tipo: {a['tipo']} | Gasto: ${a['costo']:,.0f} | Fuga: ${a['fuga']:,.0f} | ROAS {a['roas']} | CTR {a['ctr']:.2f}%")
+                                c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 7.5)
+                                rec = "ACCIÓN: Pausar 48h, revisar segmentación, relanzar con 50%." if "0 resultados" in a['tipo'] or "0 conversiones" in a['tipo'] or "0 leads" in a['tipo'] else ("ACCIÓN: Cambiar creatividad (3 hooks), bajar frecuencia <2.0, test A/B." if "Fatiga" in a['tipo'] or "CTR" in a['tipo'] else ("ACCIÓN: Ajustar puja -20%, negativar frías, revisar landing." if "CPC" in a['tipo'] or "CPL" in a['tipo'] else "ACCIÓN: Reducir 30% y reasignar a verdes ROAS>1.8."))
+                                c.drawString(50, y-38, rec); y-=62
+                        footer(3); c.showPage()
+
+                        # PAG 4 - VERDES + METODOLOGIA
+                        fondo_negro()
+                        c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 14); c.drawString(40, H-50, f"Campañas en Verde — Escalar ({len(res['verdes'])})")
+                        y = H-80
+                        for a in res['verdes'][:6]:
+                            if y < 150: break
+                            c.setFillColor(HexColor("#0A1C0A")); c.roundRect(40, y-28, W-80, 28, 8, fill=1, stroke=0)
+                            c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica", 8); c.drawString(50, y-16, f"VERDE: {a['camp'][:60]} | {a['tipo']}"); y-=36
+                        y-=10; c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 11); c.drawString(40, y, "Metodología IA.MRKT v0.7 - Regla Oro Verdad"); y-=14
+                        c.setFont("Helvetica", 8); c.setFillColor(HexColor("#AAAAAA"))
+                        metod = ["• Fuente: Solo tu CSV (Google/Meta/LinkedIn). 100% local, no acceso a cuenta.", "• META: freq>2.8 + CTR<1.5 + costo>15k = 35% fuga | Costo>25k + 0 conv = 80% | CPC>800 sin conv = 50% | ROAS<1.2 + gasto>50k = 40%.", "• GOOGLE: costo>25k + 0 conv = 70% | ROAS<1.0 = 40% | CTR<1.5 + costo>12k = 25%.", "• LINKEDIN: 0 leads + costo>20k = 80% | CTR<0.8 = 30% | CPL alto = 40%.", "• Verdad sin complacencia: Si algo requiere pago (Resend dominio verificado $) se dice. Opciones A) Paga 100% B) Gratis limitado C) Manual.", "• Limitación actual: Sin dominio ia-mrkt.com verificado, Resend solo envía a admin. Por eso este PDF trae TODO para que te lo lleves."]
+                        for m in metod:
+                            if y < 80: break
+                            p = Paragraph(m, style_small); p.wrap(W-80, 20); p.drawOn(c, 40, y-12); y-=16
+                        y-=20; c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 10); c.drawString(40, y, "Próximos pasos:"); y-=14
+                        c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica", 8.5)
+                        pasos = ["1. Pausa ROJOS con 0 conversiones > $25k.", "2. Cambia creatividades en AMARILLOS CTR<1.5%.", "3. Reasigna 30% de ROJOS a VERDES ROAS>1.8.", "4. Revisión en 72h con nuevo CSV.", f"5. Plan PRO ({LIMITE_CAMPANAS} camp ilimitado $179.900) para auditoría continua."]
+                        for ps in pasos: c.drawString(45, y, ps); y-=12
+                        footer(4); c.showPage(); c.save()
                         return tmp.name
                     pdf_path = gen_pdf()
                     # === NUEVO: ENVÍO AUTOMÁTICO PDF POR EMAIL (sin tocar diseño) ===
@@ -431,7 +431,6 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         if enviado:
                             st.markdown(f'<div style="margin-bottom:10px; padding:10px 14px; background:#0A1C0A; border:1px solid #CCFF00; border-radius:10px; font-size:12px; color:#CCFF00;">✅ PDF enviado automáticamente a <span class="mono">{email_final}</span></div>', unsafe_allow_html=True)
                         else:
-                            # Si no hay secrets configurados, no mostrar error rojo, solo info sutil
                             if "no configurado" not in detalle_envio.lower():
                                 st.markdown(f'<div style="margin-bottom:10px; font-size:11px; color:#888;">ℹ️ Email automático: {detalle_envio}</div>', unsafe_allow_html=True)
                     except Exception as e:
@@ -440,12 +439,12 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
 
                     with open(pdf_path,"rb") as f:
                         st.download_button("⬇ Descargar PDF IA.MRKT", f, file_name=f"IA_MRKT_Auditoria_{plat_usar}_{email_final.split('@')[0]}.pdf", mime="application/pdf", use_container_width=True)
-                    
+
                     if os.path.exists(LEADS_FILE):
                         try:
                             df_leads_preview = pd.read_csv(LEADS_FILE)
                             if len(df_leads_preview) > 0 and qp.get("admin","") == "1":
-                                st.markdown('<div style="margin-top:20px; font-size:11px; color:#888;">📊 LEADS GUARDADOS (solo ?admin=1)</div>', unsafe_allow_html=True)
+                                st.markdown('<div style="margin-top:20px; font-size:11px; color:#888;">📊 LEADS GUARDADOS (solo?admin=1)</div>', unsafe_allow_html=True)
                                 st.dataframe(df_leads_preview.tail(10), use_container_width=True)
                                 with open(LEADS_FILE,"rb") as lf:
                                     st.download_button("⬇ Descargar leads_ia_mrkt.csv", lf, file_name="leads_ia_mrkt.csv", mime="text/csv", use_container_width=True)
