@@ -96,6 +96,7 @@ def validar_email(email):
     if len(domain.split(".")[-1]) < 2: return False, "Extensión muy corta"
     disposable = ["tempmail","10minutemail","mailinator","guerrillamail","yopmail","throwaway"]
     if any(d in domain.lower() for d in disposable): return False, "Email temporal no permitido"
+    return True, "OK"
 
 def enviar_pdf_por_email(email_destino, pdf_path, plataforma, fuga_total):
     """Envía PDF al cliente y copia a admin. Usa st.secrets si existen, sino no envía."""
