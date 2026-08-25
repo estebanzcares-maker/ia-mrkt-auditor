@@ -99,56 +99,51 @@ def validar_email(email):
     return True, "OK"
 
 def enviar_pdf_por_email(email_destino, pdf_path, plataforma, fuga_total):
-    """Envía PDF al cliente y copia a admin. Usa st.secrets si existen, sino no envía."""
+    """Envía PDF automático con Resend - 100% automático, sin App Passwords"""
     try:
-        # Config desde Streamlit Secrets (opcional)
-        email_user = st.secrets.get("EMAIL_USER", "") if hasattr(st, "secrets") else ""
-        email_pass = st.secrets.get("EMAIL_PASS", "") if hasattr(st, "secrets") else ""
-        email_admin = st.secrets.get("EMAIL_ADMIN", email_user) if hasattr(st, "secrets") else email_user
-
-        if not email_user or not email_pass:
-            # Sin config, no falla, solo retorna False para no romper diseño
-            return False, "Email no configurado en Secrets"
-
-        msg = MIMEMultipart()
-        msg['From'] = f"IA.MRKT <{email_user}>"
-        msg['To'] = email_destino
-        msg['Subject'] = f"Tu Auditoría IA.MRKT {plataforma} - Fuga ${fuga_total:,.0f} detectada"
-
-        body = f"""Hola,
-
-Tu auditoría IA.MRKT {plataforma} está lista.
-
-Fuga detectada: ${fuga_total:,.0f} CLP/mes
-Email auditado: {email_destino}
-
-Adjunto el PDF completo.
-
-Si quieres que optimicemos esto por ti, responde este correo.
-
-— IA.MRKT
-Auditor privado
-"""
-        msg.attach(MIMEText(body, 'plain'))
-
-        with open(pdf_path, "rb") as attachment:
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attachment.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(pdf_path)}"')
-            msg.attach(part)
-
-        # Enviar a cliente + admin en BCC
-        destinatarios = [email_destino]
+        import resend
+        import base64
+        
+        api_key = st.secrets.get("RESEND_API_KEY", "") if hasattr(st, "secrets") else ""
+        email_admin = st.secrets.get("EMAIL_ADMIN", "") if hasattr(st, "secrets") else ""
+        
+        if not api_key:
+            return False, "RESEND_API_KEY no configurado"
+        
+        resend.api_key = api_key
+        
+        # Leer PDF en base64
+        with open(pdf_path, "rb") as f:
+            pdf_b64 = base64.b64encode(f.read()).decode()
+        
+        # Enviar a cliente
+        params = {
+            "from": "IA.MRKT <onboarding@resend.dev>",
+            "to": [email_destino],
+            "subject": f"Tu Auditoría IA.MRKT {plataforma} - Fuga ${fuga_total:,.0f} detectada",
+            "html": f"""
+            <h2>Tu auditoría IA.MRKT {plataforma} está lista</h2>
+            <p><strong>Fuga detectada:</strong> ${fuga_total:,.0f} CLP/mes</p>
+            <p><strong>Email auditado:</strong> {email_destino}</p>
+            <p>Adjunto el PDF completo con el detalle de campañas en ROJO y VERDE.</p>
+            <p>Si quieres que optimicemos esto por ti, responde este correo.</p>
+            <br>
+            <p>— IA.MRKT<br>Auditor privado</p>
+            """,
+            "attachments": [
+                {
+                    "filename": os.path.basename(pdf_path),
+                    "content": pdf_b64
+                }
+            ]
+        }
+        
+        # Si hay admin diferente, lo agregamos en bcc
         if email_admin and email_admin != email_destino:
-            destinatarios.append(email_admin)
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(email_user, email_pass)
-        server.send_message(msg, from_addr=email_user, to_addrs=destinatarios)
-        server.quit()
-        return True, "Enviado"
+            params["bcc"] = [email_admin]
+        
+        resend.Emails.send(params)
+        return True, "Enviado con Resend"
     except Exception as e:
         return False, str(e)
 
