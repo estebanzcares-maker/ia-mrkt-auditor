@@ -379,7 +379,7 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         for a in res['alertas']:
                             cs=(a['camp'][:28]+'..') if len(a['camp'])>28 else a['camp']
                             data.append([cs, f"${a['costo']:,.0f}", f"{a['conv']:.0f}", f"{a['roas']:.2f}" if a['roas'] else "-", f"{a['ctr']:.2f}%" if a['ctr'] else "-", f"${a['cpc']:.0f}" if a['cpc'] else f"{a['freq']:.1f}", a['tipo'][:35], f"${a['fuga']:,.0f}" if a['fuga']>0 else "$0"])
-                        table=Table(data, colWidths=[125][50][28][28][36][45][100][45], repeatRows=1)
+                        table=Table(data, colWidths=[125,50,28,28,36,45,100,45], repeatRows=1)
                         style=TableStyle([('BACKGROUND',(0,0),(-1,0),HexColor("#CCFF00")),('TEXTCOLOR',(0,0),(-1,0),HexColor("#000000")),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,0),7),('BACKGROUND',(0,1),(-1,-1),HexColor("#141414")),('TEXTCOLOR',(0,1),(-1,-1),HexColor("#E5E5E5")),('FONTSIZE',(0,1),(-1,-1),6.5),('GRID',(0,0),(-1,-1),0.4,HexColor("#262626")),('ALIGN',(1,1),(-1,-1),'CENTER')])
                         for i,a in enumerate(res['alertas'], start=1):
                             if i>=len(data): break
