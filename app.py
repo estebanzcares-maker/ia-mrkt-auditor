@@ -71,7 +71,7 @@ div[data-testid="stFileUploader"] { background: #141414!important; border: 1px d
 .alert-verde { background: #0A1C0A; border: 1px solid #1A3A1A; border-left: 4px solid #CCFF00; border-radius: 12px; padding: 14px 18px; margin-bottom:10px; }
 .alert-amarillo { background: #1C1A0A; border: 1px solid #3A351A; border-left: 4px solid #FFAA00; border-radius: 12px; padding: 14px 18px; margin-bottom:10px; color: #E5E5E5; }
 .alert-amarillo-contraste { background: #1C1A0A; border: 1px solid #FFAA00; border-left: 4px solid #FFAA00; border-radius: 12px; padding: 14px 18px; margin-bottom:10px; }
-.gallery-item { background:#141414; border:1px solid #262626; border-radius:12px; padding:14px; }
+.gallery-item { background:#141414; border-radius:12px; padding:14px; }
 .stTextInput > div > div > input { background:#0A0A0A!important; border:1px solid #333!important; border-radius:12px!important; color:#E5E5E5!important; }
 div[data-testid="stAlert"] { background-color: #1C1A0A!important; border: 1px solid #FFAA00!important; color: #E5E5E5!important; }
 div[data-testid="stAlert"] p { color: #E5E5E5!important; }
@@ -264,10 +264,10 @@ with col2:
 st.markdown('<div style="height:1px; background:#1A1A1A; margin:30px 0;"></div>', unsafe_allow_html=True)
 st.markdown('<div class="kpi-label" style="margin-bottom:14px;">AUDITORÍAS RECIENTES • GOOGLE • META • LINKEDIN</div>', unsafe_allow_html=True)
 g1,g2,g3,g4=st.columns(4)
-with g1: st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">GOOGLE • HOTEL • $1.2M</div><div class="mono" style="font-weight:700; color:#FF3B30;">$602.500 FUGA</div><div style="font-size:10px; color:#666;">3 ROJOS • 4 VERDES</div></div>', unsafe_allow_html=True)
-with g2: st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">META • FERRE • $890k</div><div class="mono" style="font-weight:700; color:#FF3B30;">$445.000 FUGA</div><div style="font-size:10px; color:#666;">2 AMARILLOS • 2 VERDES</div></div>', unsafe_allow_html=True)
-with g3: st.markdown('<div class="gallery-item"><div class="mono" style="font-size:11px; color:#888;">LINKEDIN • SAAS • $750k</div><div class="mono" style="font-weight:700; color:#FFAA00;">$407.500 FUGA</div><div style="font-size:10px; color:#666;">1 ROJO • 1 AMARILLO</div></div>', unsafe_allow_html=True)
-with g4: st.markdown('<div class="gallery-item" style="border-color:#CCFF00;"><div class="mono" style="font-size:11px; color:#CCFF00;">CLÍNICA • META • $2.1M</div><div class="mono" style="font-weight:700; color:#CCFF00;">$0 FUGA</div><div style="font-size:10px; color:#666;">6 VERDES • ROAS 5.8</div></div>', unsafe_allow_html=True)
+with g1: st.markdown('<div class="gallery-item" style="border:1px solid #FF3B30;"><div class="mono" style="font-size:11px; color:#888;">GOOGLE • HOTEL • $1.2M</div><div class="mono" style="font-weight:700; color:#FF3B30;">$602.500 FUGA</div><div style="font-size:10px; color:#666;">3 ROJOS • 4 VERDES</div></div>', unsafe_allow_html=True)
+with g2: st.markdown('<div class="gallery-item" style="border:1px solid #FF3B30;"><div class="mono" style="font-size:11px; color:#888;">META • FERRE • $890k</div><div class="mono" style="font-weight:700; color:#FF3B30;">$445.000 FUGA</div><div style="font-size:10px; color:#666;">2 AMARILLOS • 2 VERDES</div></div>', unsafe_allow_html=True)
+with g3: st.markdown('<div class="gallery-item" style="border:1px solid #FFAA00;"><div class="mono" style="font-size:11px; color:#888;">LINKEDIN • SAAS • $750k</div><div class="mono" style="font-weight:700; color:#FFAA00;">$407.500 FUGA</div><div style="font-size:10px; color:#666;">1 ROJO • 1 AMARILLO</div></div>', unsafe_allow_html=True)
+with g4: st.markdown('<div class="gallery-item" style="border:1px solid #CCFF00; box-shadow:0 0 15px rgba(204,255,0,0.25);"><div class="mono" style="font-size:11px; color:#CCFF00;">CLÍNICA • META • $2.1M</div><div class="mono" style="font-weight:700; color:#CCFF00;">$0 FUGA</div><div style="font-size:10px; color:#666;">6 VERDES • ROAS 5.8</div></div>', unsafe_allow_html=True)
 
 email_final = st.session_state.get("email_validado", email if 'email' in locals() else None)
 if email_final and csv_file and st.session_state.get("run_audit", False):
@@ -280,7 +280,6 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
             if plat_detectada!=plat_selector: plat_usar=plat_detectada; st.session_state["plat"]=plat_detectada
             else: plat_usar=plat_selector
             num_camp_csv=len(df)
-            # REGLA CORRECTA: audita exactamente LIMITE_CAMPANAS, no 1
             if num_camp_csv>LIMITE_CAMPANAS:
                 precio_full=PACKS.get(num_camp_csv, PRECIO_BASE*num_camp_csv)
                 st.markdown(f'<div class="alert-amarillo-contraste"><div style="color:#FFAA00; font-weight:700;">⚠ LÍMITE DE PLAN</div><div style="color:#E5E5E5;">CSV {num_camp_csv} campañas, plan {LIMITE_CAMPANAS}. Auditamos primeras {LIMITE_CAMPANAS} de {num_camp_csv}. Las otras {num_camp_csv - LIMITE_CAMPANAS} requieren upgrade.</div><div style="color:#888; font-size:11px;">Pack {num_camp_csv} = ${precio_full:,.0f} • Pagaste ${PRECIO_PLAN:,.0f} por {LIMITE_CAMPANAS}</div></div>', unsafe_allow_html=True)
