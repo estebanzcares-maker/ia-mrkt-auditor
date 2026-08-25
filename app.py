@@ -243,7 +243,7 @@ with col2:
         btn_auditar = st.button("🔒 AUDITAR CON IA.MRKT", use_container_width=True, key="btn_auditar")
         if btn_auditar:
             if not email: st.markdown('<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px;">⚠ Ingresa correo</div>', unsafe_allow_html=True)
-            elif not email_valido: st.markdown(f'<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px;">❌ {email_msg}</div>', unsafe_allow_html=True)
+            elif not email_valido: st.markdown(f'<div style="background:#1C1A0A; border:1px solid #FF3B30; border-radius:8px; padding:10px; font-size:11px;">❌ {email_msg}</div>', unsafe_allow_html=True)
             else: st.session_state["run_audit"]=True; st.session_state["email_validado"]=email.strip()
         st.markdown(f'<div style="margin-top:12px; font-size:11px; color:#666; text-align:center;">Plan {LIMITE_CAMPANAS} camp • ${PRECIO_BASE:,.0f} c/u</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -281,7 +281,7 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                 st.markdown('<div style="height:1px; background:#1A1A1A; margin:30px 0;"></div>', unsafe_allow_html=True)
                 if res["total_fuga"]==0: st.markdown(f'<h2>Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">$0 FUGA • OPTIMIZADA</span></h2>', unsafe_allow_html=True)
                 else: st.markdown(f'<h2>Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">${res["total_fuga"]:,.0f} CLP</span></h2>', unsafe_allow_html=True)
-                c1,c2=st.columns([2][1])
+                c1,c2=st.columns([2,1])
                 with c1:
                     for a in res["rojos"]:
                         css="alert-rojo" if a["color"]=="rojo" else "alert-amarillo"
@@ -292,25 +292,20 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         tmp=tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
                         c=canvas.Canvas(tmp.name, pagesize=A4); W,H=A4
                         styles=getSampleStyleSheet()
-                        # === REGLAS AUTOMATICAS ANTI-ENCUADRE V5 ===
                         style_small=ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=11, textColor=HexColor("#CCCCCC"))
                         style_small_w=ParagraphStyle('smallw', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=HexColor("#FFFFFF"))
                         style_tiny=ParagraphStyle('tiny', parent=styles['Normal'], fontSize=7, leading=10, textColor=HexColor("#AAAAAA"))
                         style_causa=ParagraphStyle('causa', parent=styles['Normal'], fontSize=8, leading=11.5, textColor=HexColor("#E5E5E5"))
-                        style_kpi_sub=ParagraphStyle('kpisub', parent=styles['Normal'], fontSize=8, leading=10, textColor=HexColor("#AAAAAA"))
                         style_action_body=ParagraphStyle('actB', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=HexColor("#0A0A0A"))
                         LIME_SOFT=HexColor("#E8FF99")
                         M=50
                         MIN_Y=50
-
                         def fondo_negro(): c.setFillColor(HexColor("#0A0A0A")); c.rect(0,0,W,H, fill=1, stroke=0)
                         def footer(num): c.setFillColor(HexColor("#555555")); c.setFont("Helvetica", 6); c.drawString(M, 18, f"IA.MRKT • {plat_usar} • {email_final} • {datetime.now().strftime('%d/%m/%Y')} • Pag {num}/4"); c.drawRightString(W-M, 18, "Confidencial")
-
                         def safe_wrap_para(para, width, max_h=500):
                             w,h = para.wrap(width, max_h)
                             return w,h
-
-                        def autofit_text(c_obj, text, x, y, max_w, font_bold="Helvetica-Bold", font="Helvetica", start_size=13, min_size=8):
+                        def autofit_text(c_obj, text, x, y, max_w, font_bold="Helvetica-Bold", start_size=22, min_size=14):
                             size = start_size
                             while size >= min_size:
                                 c_obj.setFont(font_bold, size)
@@ -319,60 +314,44 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                                 size -= 0.5
                             c_obj.drawString(x, y, text)
                             return size
-
                         total_fuga=res['total_fuga']; num_rojos=len(res['rojos']); num_verdes=len(res['verdes']); total_camp=len(df_limite) if 'df_limite' in locals() else len(res['alertas'])
-
-                        # PAG1 - CON REGLA ANTI-OVERLAP KPI
                         fondo_negro()
                         c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 30); c.drawString(M, H-55, "IA.MRKT")
                         c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica", 11); c.drawString(M, H-72, f"Auditoría de Fuga Presupuestaria — {plat_usar} • Plan {LIMITE_CAMPANAS} camp • Motor v0.6.8")
                         c.setFont("Helvetica", 8); c.setFillColor(HexColor("#888888")); c.drawString(M, H-84, f"Cliente: {email_final} | Fecha: {datetime.now().strftime('%d/%m/%Y')} | {total_camp} campañas analizadas")
-
-                        # KPI - DOS COLUMNAS SIN OVERLAP, CON AUTOFIT
-                        c.setFillColor(HexColor("#1A1A1A")); c.roundRect(M, H-165, W-2*M, 65, 12, fill=1, stroke=0)
-                        c.setStrokeColor(HexColor("#333333")); c.roundRect(M, H-165, W-2*M, 65, 12, fill=0, stroke=1)
-                        # Columna izquierda fuga - autofit
+                        c.setFillColor(HexColor("#1A1A1A")); c.roundRect(M, H-165, W-2*M, 65, 12, fill=1, stroke=0); c.setStrokeColor(HexColor("#333333")); c.roundRect(M, H-165, W-2*M, 65, 12, fill=0, stroke=1)
                         c.setFillColor(HexColor("#FF3B30") if total_fuga>0 else HexColor("#CCFF00"))
                         autofit_text(c, f"${total_fuga:,.0f} CLP/mes", M+10, H-128, 190, start_size=22, min_size=14)
                         c.setFont("Helvetica", 8); c.setFillColor(HexColor("#FFFFFF")); c.drawString(M+10, H-145, "Fuga estimada mensual")
-                        # Columna derecha - texto controlado, wrap si es largo
                         right_text = f"{total_camp} camp | {num_rojos} críticas | {num_verdes} verdes"
                         sub_text = f"Plataforma {plat_usar} • Recupero 35-80% • ROI x4.2"
                         c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 11)
-                        # Si el texto de la derecha es muy largo, lo dibuja más pequeño y abajo
                         if c.stringWidth(right_text, "Helvetica-Bold", 11) > (W-2*M-220):
                             c.setFont("Helvetica-Bold", 9)
                         c.drawString(M+220, H-128, right_text)
                         c.setFont("Helvetica", 7.5); c.setFillColor(HexColor("#AAAAAA")); c.drawString(M+220, H-142, sub_text)
-
                         y=H-190
                         c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 12); c.drawString(M, y, "Resumen Ejecutivo"); y-=16
                         if total_camp==1 and num_rojos==1:
                             a=res['rojos'][0]; resumen=f"Se analizó 1 campaña de {plat_usar}: <b>{a['camp'][:50]}</b>. Fuga de <b>${total_fuga:,.0f}</b> por <b>{a['tipo']}</b>. Gasto ${a['costo']:,.0f} con {a['conv']:.0f} conv, CTR {a['ctr']:.2f}% y CPC ${a['cpc']:,.0f}. Causa: segmentación B2B amplia. Si re-segmentas ABM Decision Makers TI, recuperas ${total_fuga*0.7:,.0f}/mes en 7 días."
                         else: resumen=f"Se analizaron {total_camp} campañas de {plat_usar}. Fuga total ${total_fuga:,.0f}/mes en {num_rojos} campaña(s). {num_verdes} en verde ROAS>1.5 escalar +20%. Causa: mala distribución y fatiga creativa."
                         p=Paragraph(resumen, style_small_w); _,ph=safe_wrap_para(p, W-2*M, 80); p.drawOn(c, M, y-ph); y-=ph+18
-
-                        # CAJAS CAUSA/IMPACTO CON REGLA: ALTURA DINAMICA + NO OVERLAP + PADDING INTERNO MINIMO 12
                         box_w=(W-2*M-10)/2
                         causa_txt=f"<b><font color='#FFAA00'>Causa Raíz Detectada</font></b><br/><br/>• {res['rojos'][0]['tipo'] if res['rojos'] else 'Optimizada'}<br/>• CTR bajo = creatividades no conectan<br/>• 0 conv + gasto alto = segmentación fallida<br/>• Frecuencia y CPC inflado"
                         impacto_txt=f"<b><font color='#CCFF00'>Impacto y Potencial Recupero</font></b><br/><br/>• Fuga actual: ${total_fuga:,.0f}/mes<br/>• Recupero 70%: ${total_fuga*0.7:,.0f}/mes<br/>• Anualizado: ${total_fuga*0.7*12:,.0f}<br/>• Acción &lt;48h reduce 80% pérdida"
                         p_c=Paragraph(causa_txt, style_causa); p_i=Paragraph(impacto_txt, style_causa)
                         _,h_c=safe_wrap_para(p_c, box_w-20, 200); _,h_i=safe_wrap_para(p_i, box_w-20, 200)
                         box_h=max(h_c,h_i)+26
-                        # REGLA: si no cabe, nueva pagina
                         if y - box_h < MIN_Y+40:
                             footer(1); c.showPage(); fondo_negro(); y=H-50
                         c.setFillColor(HexColor("#141414")); c.roundRect(M, y-box_h, box_w, box_h, 10, fill=1, stroke=0); c.setStrokeColor(HexColor("#262626")); c.roundRect(M, y-box_h, box_w, box_h, 10, fill=0, stroke=1)
                         c.setFillColor(HexColor("#141414")); c.roundRect(M+box_w+10, y-box_h, box_w, box_h, 10, fill=1, stroke=0); c.setStrokeColor(HexColor("#262626")); c.roundRect(M+box_w+10, y-box_h, box_w, box_h, 10, fill=0, stroke=1)
                         p_c.drawOn(c, M+12, y-box_h+14); p_i.drawOn(c, M+box_w+22, y-box_h+14)
                         y-=box_h+20
-
                         c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 10); c.drawString(M, y, "Metodología IA.MRKT + Próximos Pasos"); y-=14
                         metod=f"Fuente: solo CSV {plat_usar} (100% local). Reglas: costo&gt;25k+0conv=80% fuga | CTR&lt;1.5=25% | ROAS&lt;1.2=40%. Próximos pasos: Pausar ROJOS, ABM Decision Makers, 3 hooks, landing CTA, revisión 72h."
                         p4=Paragraph(metod, style_tiny); _,hm=safe_wrap_para(p4, W-2*M, 60); p4.drawOn(c, M, y-hm)
                         footer(1); c.showPage()
-
-                        # PAG2 - TABLA CON MARGENES SEGUROS
                         fondo_negro()
                         c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 14); c.drawString(M, H-45, f"Detalle Completo — {total_camp} campañas [{plat_usar}]")
                         c.setFont("Helvetica", 7.5); c.setFillColor(HexColor("#888888")); c.drawString(M, H-57, "Métricas reales extraídas de tu CSV")
@@ -380,7 +359,7 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         for a in res['alertas']:
                             cs=(a['camp'][:28]+'..') if len(a['camp'])>28 else a['camp']
                             data.append([cs, f"${a['costo']:,.0f}", f"{a['conv']:.0f}", f"{a['roas']:.2f}" if a['roas'] else "-", f"{a['ctr']:.2f}%" if a['ctr'] else "-", f"${a['cpc']:.0f}" if a['cpc'] else f"{a['freq']:.1f}", a['tipo'][:35], f"${a['fuga']:,.0f}" if a['fuga']>0 else "$0"])
-                        table=Table(data, colWidths=[125][50][28][28][36][45][100][45], repeatRows=1)
+                        table=Table(data, colWidths=[125,50,28,28,36,45,100,45], repeatRows=1)
                         style=TableStyle([('BACKGROUND',(0,0),(-1,0),HexColor("#CCFF00")),('TEXTCOLOR',(0,0),(-1,0),HexColor("#000000")),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,0),7),('BACKGROUND',(0,1),(-1,-1),HexColor("#141414")),('TEXTCOLOR',(0,1),(-1,-1),HexColor("#E5E5E5")),('FONTSIZE',(0,1),(-1,-1),6.5),('GRID',(0,0),(-1,-1),0.4,HexColor("#262626")),('ALIGN',(1,1),(-1,-1),'CENTER')])
                         for i,a in enumerate(res['alertas'], start=1):
                             if i>=len(data): break
@@ -397,8 +376,6 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         c.setFont("Helvetica", 7); c.setFillColor(HexColor("#AAAAAA")); c.drawString(M+10, y2-24, "GOOGLE: CPC < $800 OK | CTR >1.5% | ROAS >1.5 | META: Freq <2.5 | CTR >1.5% | CPC < $800 | LINKEDIN: CTR >0.8% | CPL < $1200")
                         c.drawString(M+10, y2-36, f"Tu caso: CTR 0.28% = 65% bajo benchmark | CPC $4200 = 250% sobre | 0 leads = falla segmentación | Recomendación: Test A/B urgente")
                         footer(2); c.showPage()
-
-                        # PAG3 - ACCION CON AMARILLO SUAVE Y AUTOFIT
                         fondo_negro()
                         c.setFillColor(HexColor("#FF3B30")); c.setFont("Helvetica-Bold", 14); c.drawString(M, H-45, f"Alertas Críticas — {len(res['rojos'])} encontradas • Acción Inmediata")
                         y3=H-75
@@ -419,8 +396,6 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                             p_act.drawOn(c, M+14, y3-box_act_h+15)
                             y3-=box_act_h+20
                         footer(3); c.showPage()
-
-                        # PAG4
                         fondo_negro()
                         c.setFillColor(HexColor("#CCFF00")); c.setFont("Helvetica-Bold", 14); c.drawString(M, H-45, f"Campañas en Verde + Checklist 72h")
                         y4=H-70
@@ -446,12 +421,10 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
                         footer(4); c.showPage(); c.save()
                         return tmp.name
                     pdf_path=gen_pdf()
-                    # REGLA: no mostrar error tecnico Resend al cliente
                     try:
                         enviado,det=enviar_pdf_por_email(email_final,pdf_path,plat_usar,res["total_fuga"])
                         if enviado:
                             st.markdown(f'<div style="padding:10px; background:#0A1C0A; border:1px solid #CCFF00; border-radius:10px; color:#CCFF00;">✅ PDF enviado a {email_final}</div>', unsafe_allow_html=True)
-                        # si falla, no mostramos detalle tecnico, solo boton lime ya visible
                     except: pass
                     with open(pdf_path,"rb") as f: st.download_button("⬇ Descargar PDF IA.MRKT - ACCIÓN 48H INCLUIDA", f, file_name=f"IA_MRKT_{plat_usar}_{email_final.split('@')[0]}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as e:
