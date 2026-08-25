@@ -20,10 +20,16 @@ PACKS = {1: 59900, 3: 129000, 5: 179900}
 PLAN_MAP = {"free":1,"0":1,"1":1,"starter":1,"3":3,"growth":3,"5":5,"pro":5,"unlimited":5}
 PRECIO_BASE = PACKS[1]
 qp = st.query_params
+
+def get_qp(name, default=""):
+    v = qp.get(name, default)
+    if isinstance(v, list): return str(v[0]).strip().lower() if v else default
+    return str(v).strip().lower()
+
 LIMITE_CAMPANAS = 1
 try:
-    raw_plan = str(qp.get("plan","")).strip().lower()
-    raw_limit = str(qp.get("limit","")).strip().lower()
+    raw_plan = get_qp("plan","")
+    raw_limit = get_qp("limit","")
     if raw_plan:
         if raw_plan in PLAN_MAP: LIMITE_CAMPANAS = PLAN_MAP[raw_plan]
         else: LIMITE_CAMPANAS = int(raw_plan)
@@ -34,9 +40,11 @@ except: pass
 if LIMITE_CAMPANAS < 1: LIMITE_CAMPANAS = 1
 if LIMITE_CAMPANAS > 5: LIMITE_CAMPANAS = 5
 PRECIO_PLAN = PACKS.get(LIMITE_CAMPANAS, PRECIO_BASE * LIMITE_CAMPANAS)
+IS_ADMIN = get_qp("admin","") == "1"
 
 if "auditorias_hechas" not in st.session_state: st.session_state["auditorias_hechas"] = 0
 if "run_audit" not in st.session_state: st.session_state["run_audit"] = False
+if "uploader_key" not in st.session_state: st.session_state["uploader_key"] = 0
 
 st.set_page_config(page_title="IA.MRKT — Auditoría", page_icon="●", layout="wide")
 
@@ -218,8 +226,13 @@ with col2:
     st.markdown(f'<div class="card-lime"><div class="kpi-label" style="color:#CCFF00;">ACCESO PRIVADO IA.MRKT • PLAN {LIMITE_CAMPANAS} CAMPAÑA{"S" if LIMITE_CAMPANAS>1 else ""}</div>', unsafe_allow_html=True)
     if st.session_state["auditorias_hechas"] >= LIMITE_CAMPANAS:
         st.markdown(f'<div style="background:#1C0A0A; border:1px solid #FF3B30; border-radius:12px; padding:16px; margin:12px 0;"><div class="mono" style="color:#FF3B30; font-weight:700;">LÍMITE ALCANZADO — {LIMITE_CAMPANAS} CAMPAÑA{"S" if LIMITE_CAMPANAS>1 else ""}</div><div style="font-size:13px; color:#DDD; margin-top:8px;">Ya auditaste {st.session_state["auditorias_hechas"]} con ${PRECIO_PLAN:,.0f}.<br>Contacta: estebanzcares@gmail.com</div></div>', unsafe_allow_html=True)
-        if st.button("🔄 REINICIAR (ADMIN)", use_container_width=True):
-            st.session_state["auditorias_hechas"]=0; st.session_state["run_audit"]=False; st.session_state.pop("plat_autodetect",None); st.rerun()
+        if IS_ADMIN:
+            if st.button("🔄 REINICIAR (ADMIN)", use_container_width=True, key="btn_admin_reset"):
+                st.session_state["auditorias_hechas"]=0
+                st.session_state["run_audit"]=False
+                st.session_state["uploader_key"]+=1
+                st.session_state.pop("plat_autodetect",None)
+                st.rerun()
         email=None; csv_file=None
     else:
         st.markdown('<div style="font-size:13px; color:#888; margin:12px 0 8px 0;">Tu correo para PDF completo</div>', unsafe_allow_html=True)
@@ -231,7 +244,7 @@ with col2:
             else: st.markdown(f'<div style="font-size:10px; color:#FF3B30;">❌ {email_msg}</div>', unsafe_allow_html=True)
         else: email_valido=False
         st.markdown(f'<div style="font-size:13px; color:#888; margin:16px 0 8px 0;">CSV de {st.session_state.get("plat","GOOGLE")} Ads — quedan {LIMITE_CAMPANAS - st.session_state["auditorias_hechas"]} auditoría(s)</div>', unsafe_allow_html=True)
-        csv_file = st.file_uploader("csv", type=["csv"], label_visibility="collapsed")
+        csv_file = st.file_uploader("csv", type=["csv"], label_visibility="collapsed", key=f"csv_uploader_{st.session_state['uploader_key']}")
         if csv_file:
             try:
                 df_tmp=pd.read_csv(csv_file); plat_detectada=autodetect_platform(df_tmp)
@@ -267,9 +280,10 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
             if plat_detectada!=plat_selector: plat_usar=plat_detectada; st.session_state["plat"]=plat_detectada
             else: plat_usar=plat_selector
             num_camp_csv=len(df)
+            # REGLA CORRECTA: audita exactamente LIMITE_CAMPANAS, no 1
             if num_camp_csv>LIMITE_CAMPANAS:
                 precio_full=PACKS.get(num_camp_csv, PRECIO_BASE*num_camp_csv)
-                st.markdown(f'<div class="alert-amarillo-contraste"><div style="color:#FFAA00; font-weight:700;">⚠ LÍMITE DE PLAN</div><div style="color:#E5E5E5;">CSV {num_camp_csv} campañas, plan {LIMITE_CAMPANAS}. Auditamos primeras {LIMITE_CAMPANAS}.</div><div style="color:#888; font-size:11px;">Pack {num_camp_csv} = ${precio_full:,.0f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="alert-amarillo-contraste"><div style="color:#FFAA00; font-weight:700;">⚠ LÍMITE DE PLAN</div><div style="color:#E5E5E5;">CSV {num_camp_csv} campañas, plan {LIMITE_CAMPANAS}. Auditamos primeras {LIMITE_CAMPANAS} de {num_camp_csv}. Las otras {num_camp_csv - LIMITE_CAMPANAS} requieren upgrade.</div><div style="color:#888; font-size:11px;">Pack {num_camp_csv} = ${precio_full:,.0f} • Pagaste ${PRECIO_PLAN:,.0f} por {LIMITE_CAMPANAS}</div></div>', unsafe_allow_html=True)
                 df_limite=df.head(LIMITE_CAMPANAS)
             else: df_limite=df
             res,err=detectar(df_limite, plataforma=plat_usar)
@@ -277,7 +291,10 @@ if email_final and csv_file and st.session_state.get("run_audit", False):
             else:
                 csv_nombre=getattr(csv_file,'name','csv_subido')
                 guardar_lead(email=email_final, plataforma=plat_usar, fuga=res["total_fuga"], plan_camp=LIMITE_CAMPANAS, precio_plan=PRECIO_PLAN, num_camp_csv=num_camp_csv, num_verdes=len(res["verdes"]), num_rojos=len(res["rojos"]), csv_nombre=csv_nombre)
-                st.session_state["auditorias_hechas"]+=1; st.session_state["run_audit"]=False; st.session_state.pop("plat_autodetect",None)
+                st.session_state["auditorias_hechas"]+=1
+                st.session_state["run_audit"]=False
+                st.session_state["uploader_key"]+=1
+                st.session_state.pop("plat_autodetect",None)
                 st.markdown('<div style="height:1px; background:#1A1A1A; margin:30px 0;"></div>', unsafe_allow_html=True)
                 if res["total_fuga"]==0: st.markdown(f'<h2>Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">$0 FUGA • OPTIMIZADA</span></h2>', unsafe_allow_html=True)
                 else: st.markdown(f'<h2>Tu auditoría IA.MRKT [{plat_usar}] — <span class="mono" style="color:#CCFF00;">${res["total_fuga"]:,.0f} CLP</span></h2>', unsafe_allow_html=True)
